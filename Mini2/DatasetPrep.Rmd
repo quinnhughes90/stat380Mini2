@@ -1,0 +1,32 @@
+---
+title: "DatasetPrep"
+output: html_document
+---
+
+
+```{r}
+library(tidyverse)
+```
+
+```{r load data}
+prev_clean <- read.csv('clean_2010.csv')
+demo <- read.csv('democracy2020.csv')
+```
+
+```{r}
+clean_wo_resp <- prev_clean |> 
+  select(- daily_income)
+```
+
+```{r}
+head(demo)
+
+dataset <- inner_join(clean_wo_resp, demo)
+
+dataset_unnamed <- dataset |>
+  select(- name)
+```
+
+```{r}
+write.csv(dataset_unnamed, "clean_mini2.csv", row.names = FALSE)
+```

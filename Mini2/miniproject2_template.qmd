@@ -1,0 +1,104 @@
+---
+title: "Mini-project 2 Template"
+author: "Team member names here."
+format: pdf
+editor: visual
+---
+Feel free to change render format to html using
+
+format: html
+
+self-contained: true
+
+## Instructions
+This is the template document for mini-project 2. You must use the template document for your code, since it will make it much easier to follow.
+
+## Libraries and data load
+
+Put whatever libraries you use here.
+```{r}
+
+```
+
+Load your data here
+```{r}
+
+```
+
+## Exploratory data analysis
+
+For this section graph and find statistics for each of your predictor variables vs the response. You do not need to look at the predictor variables individually
+
+## Variable 1: INSERT NAME HERE
+### Graph and description
+### Stats and description
+## Variable 2: INSERT NAME HERE
+### Graph and description
+### Stats and description
+## Variable 3: INSERT NAME HERE
+### Graph and description
+### Stats and description
+## Variable 4: INSERT NAME HERE
+### Graph and description
+### Stats and description
+## Variable 5: INSERT NAME HERE
+### Graph and description
+### Stats and description
+
+## Which variable for single variable models?
+From your exploratory data analsys, which variable will you use for the single variable models? Why?
+## kNN classification
+
+### Single variable model
+Make a kNN model using your best predictor variable
+#### Model tuning to find k
+
+#### Model for best k
+
+#### Model evaluation-accuracy, cv for overfitting
+
+
+### All variable model
+Make a kNN model using all your predictor variables
+#### Model tuning to find k using cv.
+
+#### Model for best k
+
+#### Model evaluation-accuracy, cv for overfitting
+
+### Which model was best?
+
+Of your two kNN models which performed the best? Why? If it was the multivariate model was it worth the trade off of complexity? Why?
+
+## Logistic Regression
+
+
+### Single variable model
+Make a logistic regression model using your best predictor variable
+#### Model 
+
+#### Equation and Graph of model
+
+#### Model evaluation-p-values, accuracy, cv for overfitting, roc, auc 
+
+
+### All variable model
+Make a logistic regression model using all your predictor variables
+#### Model 
+
+#### Equation of model
+
+#### Model evaluation-p-values, accuracy, cv for overfitting, roc, auc 
+
+### Which model was best?
+
+Of your two logistic regression models which performed the best? Why? If it was the multivariate model was it worth the trade off of complexity? Why?
+
+
+## Best model
+Which model would you reccomend the lab use? Why? Are there tradeoff between interpretability and model metrics?
+
+
+## Your question
+
+You will write your own question about the data, create a data visualization that can help answer your question, and write an answer to your question. The question/visualization should explore the relationship between at least 2 of the variables in the dataset. Be sure you include both the question and the answer to your question based on the visualization you have created.  It should be a different question than last mini-project.
