@@ -1,6 +1,6 @@
 ---
 title: "Mini-project 2 Template"
-author: "Team member names here."
+author: "Jincheng Li, Quinn Hughes, Mason Spikula"
 format: pdf
 editor: visual
 ---
