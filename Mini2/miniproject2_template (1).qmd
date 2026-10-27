@@ -1,0 +1,242 @@
+---
+title: "Mini-project 2 Template"
+author: "Team member names here."
+format: pdf
+editor: visual
+---
+
+Feel free to change render format to html using
+
+format: html
+
+self-contained: true
+
+## Instructions
+
+This is the template document for mini-project 2. You must use the template document for your code, since it will make it much easier to follow.
+
+## Libraries and data load
+
+Put whatever libraries you use here.
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+```
+
+Load your data here
+
+```{r}
+d <- read.csv('clean_mini2.csv')
+```
+
+## Exploratory data analysis
+
+For this section graph and find statistics for each of your predictor variables vs the response. You do not need to look at the predictor variables individually
+
+## Variable 1: `cell_phones_per_100_ppl`
+
+### Graph and description
+
+```{r cell_phones_per_100_ppl v. demo graph}
+d |> 
+  ggplot(aes(x = factor(Democracy), y = cell_phones_per_100_ppl)) +
+  geom_boxplot() +
+  labs(x = "democracy", y = "cell phone per 100 people")
+```
+Democratic countries have higher cell phone per 100 capita than the non-democratic ones. And the mid-quantiles are separated pretty well.
+
+### Stats and description
+
+```{r cell_phones_per_100_ppl v. demo stat}
+d %>%
+  group_by(Democracy) %>%
+  summarise(
+    n = sum(!is.na(cell_phones_per_100_ppl)),
+    mean = mean(cell_phones_per_100_ppl, na.rm = TRUE),
+    sd = sd(cell_phones_per_100_ppl, na.rm = TRUE),
+    min = min(cell_phones_per_100_ppl, na.rm = TRUE),
+    Q1 = quantile(cell_phones_per_100_ppl, 0.25, na.rm = TRUE),
+    median = median(cell_phones_per_100_ppl, na.rm = TRUE),
+    Q3 = quantile(cell_phones_per_100_ppl, 0.75, na.rm = TRUE),
+    max = max(cell_phones_per_100_ppl, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+Non-democratic countries have higher std.dev. than the democratic ones, and all quantiles are higher in democratic countries.
+
+## Variable 2: `residential_energy_use_pctg`
+
+### Graph and description
+
+```{r residential_energy_use_pctg v. demo graph}
+d |> 
+  ggplot(aes(x = factor(Democracy), y = residential_energy_use_pctg)) +
+  geom_boxplot() +
+  labs(x = "democracy", y = "residential energy use percentage")
+```
+The mid quantiles are also well separated: democratic countries have much lower residential energy use percentage.
+
+### Stats and description
+
+```{r residential_energy_use_pctg v. demo stat}
+d %>%
+  group_by(Democracy) %>%
+  summarise(
+    n = sum(!is.na(residential_energy_use_pctg)),
+    mean = mean(residential_energy_use_pctg, na.rm = TRUE),
+    sd = sd(residential_energy_use_pctg, na.rm = TRUE),
+    min = min(residential_energy_use_pctg, na.rm = TRUE),
+    Q1 = quantile(residential_energy_use_pctg, 0.25, na.rm = TRUE),
+    median = median(residential_energy_use_pctg, na.rm = TRUE),
+    Q3 = quantile(residential_energy_use_pctg, 0.75, na.rm = TRUE),
+    max = max(residential_energy_use_pctg, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+The grouped distribution is similar to the first one: democratic countries have overall better performance in all quantile and less standard deviation, since there's some physical and economic cap for the variable. 
+
+## Variable 3: `landlocked`
+
+### Graph and description
+
+```{r landlocked v. demo graph}
+d |>
+  filter(!is.na(Democracy)) |>
+  count(landlocked, Democracy) |>
+  group_by(landlocked) |>
+  mutate(proportion = n / sum(n)) |>
+  ungroup()
+```
+Coastline countries have lower proportion of non-democracy (0.46 vs. 0.58), but doesn't provide enough sufficient evidence to separate the democracy groups.
+
+### Stats and description
+
+```{r landlocked v. demo stat}
+tab <- table(d$landlocked, d$Democracy)
+tab
+
+chisq.test(tab)
+
+fisher.test(tab)
+```
+Democratic regimes were less common among landlocked countries (41.7%) than coastal countries (53.3%). However, this association was not statistically significant (Fisher’s exact test: OR = 0.63, 95% CI [0.23, 1.68], p = .369).
+
+## Variable 4: `human_development_ind`
+
+### Graph and description
+
+```{r human_development_ind v. demo graph}
+d |> 
+  ggplot(aes(x = factor(Democracy), y = human_development_ind)) +
+  geom_boxplot() +
+  labs(x = "democracy", y = "human_development_ind")
+```
+The mid quantile are almost separated (w/ a small overlap). The spread was similar, but democratic countries still have it smaller.
+
+### Stats and description
+
+```{r human_development_ind v. demo stat}
+d %>%
+  group_by(Democracy) %>%
+  summarise(
+    n = sum(!is.na(human_development_ind)),
+    mean = mean(human_development_ind, na.rm = TRUE),
+    sd = sd(human_development_ind, na.rm = TRUE),
+    min = min(human_development_ind, na.rm = TRUE),
+    Q1 = quantile(human_development_ind, 0.25, na.rm = TRUE),
+    median = median(human_development_ind, na.rm = TRUE),
+    Q3 = quantile(human_development_ind, 0.75, na.rm = TRUE),
+    max = max(human_development_ind, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+The difference of std. dev. is smaller than the previous two variables, and in all quantile the democratic countries are having higher hdi.
+
+## Variable 5: `maternal_mortality`
+
+### Graph and description
+
+```{r maternal_mortality v. demo graph}
+d |> 
+  ggplot(aes(x = factor(Democracy), y = maternal_mortality)) +
+  geom_boxplot() +
+  labs(x = "democracy", y = "maternal mortality")
+```
+Democratic countries have very little maternal mortality, and the spread is really compressed to the bottom, while having several outliers, and non-democratic countries also have some high-performance cases, (democratic states overlapping with all high-performance non-democratic states.)
+
+### Stats and description
+
+```{r maternal_mortality v. demo stat}
+d %>%
+  group_by(Democracy) %>%
+  summarise(
+    n = sum(!is.na(maternal_mortality)),
+    mean = mean(maternal_mortality, na.rm = TRUE),
+    sd = sd(maternal_mortality, na.rm = TRUE),
+    min = min(maternal_mortality, na.rm = TRUE),
+    Q1 = quantile(maternal_mortality, 0.25, na.rm = TRUE),
+    median = median(maternal_mortality, na.rm = TRUE),
+    Q3 = quantile(maternal_mortality, 0.75, na.rm = TRUE),
+    max = max(maternal_mortality, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+The std. dev. is much smaller in democratic countries, and performance is better in all quantiles.
+
+## Which variable for single variable models?
+
+From your exploratory data analsys, which variable will you use for the single variable models? Why? \## kNN classification
+
+I think the best predictor might be the hdi, since it offers the most separating effect on democracy groups. And the others are mostly overlapping in a relatively large proportion.
+
+### Single variable model
+
+Make a kNN model using your best predictor variable \#### Model tuning to find k
+
+#### Model for best k
+
+#### Model evaluation-accuracy, cv for overfitting
+
+### All variable model
+
+Make a kNN model using all your predictor variables \#### Model tuning to find k using cv.
+
+#### Model for best k
+
+#### Model evaluation-accuracy, cv for overfitting
+
+### Which model was best?
+
+Of your two kNN models which performed the best? Why? If it was the multivariate model was it worth the trade off of complexity? Why?
+
+## Logistic Regression
+
+### Single variable model
+
+Make a logistic regression model using your best predictor variable \#### Model
+
+#### Equation and Graph of model
+
+#### Model evaluation-p-values, accuracy, cv for overfitting, roc, auc
+
+### All variable model
+
+Make a logistic regression model using all your predictor variables \#### Model
+
+#### Equation of model
+
+#### Model evaluation-p-values, accuracy, cv for overfitting, roc, auc
+
+### Which model was best?
+
+Of your two logistic regression models which performed the best? Why? If it was the multivariate model was it worth the trade off of complexity? Why?
+
+## Best model
+
+Which model would you reccomend the lab use? Why? Are there tradeoff between interpretability and model metrics?
+
+## Your question
+
+You will write your own question about the data, create a data visualization that can help answer your question, and write an answer to your question. The question/visualization should explore the relationship between at least 2 of the variables in the dataset. Be sure you include both the question and the answer to your question based on the visualization you have created. It should be a different question than last mini-project.
