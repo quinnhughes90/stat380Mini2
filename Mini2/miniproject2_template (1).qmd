@@ -13,6 +13,8 @@ self-contained: true
 
 ## Instructions
 
+# Github
+
 This is the template document for mini-project 2. You must use the template document for your code, since it will make it much easier to follow.
 
 ## Libraries and data load
@@ -241,7 +243,7 @@ best_k
 
 21 is the best k.
 
-#### Model for best k 
+#### Model for best k
 
 ```{r}
 knn_spec<-nearest_neighbor(neighbors=21,  weight_func = "rectangular") |>
@@ -279,6 +281,47 @@ cv_k_21=cv_metrics_knn|>
 
 cv_k_21
 ```
+
+The confusion matrix has predictions in rows and actual democracy status in columns. The model correctly classifies 56 non-democratic countries and 50 democratic countries. It incorrectly labels 8 non-democratic countries as democratic and 17 democratic countries as non-democratic.
+
+The fitted-data accuracy is
+
+$$\text{Accuracy} = \frac{\text{correct predictions}}{\text{all predictions}}
+= \frac{56 + 50}{56 + 50 + 8 + 17}
+= \frac{106}{131} \approx 0.8092.$$
+
+This is 80.92% accuracy on the same countries used to fit the model. The following code checks the calculation, shows the held-out accuracy for each fold at the selected k, and compares fitted-data accuracy with mean cross-validation accuracy.
+
+```{r hdi-knn-evaluation-work}
+# Check the confusion-matrix calculation
+hdi_results |>
+  summarise(correct = sum(.pred_class == Democracy),
+            total = n(),
+            accuracy = correct / total)
+
+# Show each held-out fold's accuracy for the selected k
+hdi_fold_accuracy <- collect_metrics(knn_cv, summarize = FALSE) |>
+  filter(neighbors == best_k$neighbors, .metric == "accuracy") |>
+  select(id, .estimate)
+hdi_fold_accuracy
+
+hdi_fold_accuracy |>
+  summarise(mean_cv_accuracy = mean(.estimate))
+
+# Compare fitted-data accuracy with the mean across the five folds
+hdi_accuracy_comparison <- hdi_metric |>
+  select(.metric, fitted_accuracy = .estimate) |>
+  left_join(
+    cv_k_21 |> select(.metric, cv_accuracy = mean),
+    by = ".metric"
+  ) |>
+  mutate(gap_percentage_points = 100 * (fitted_accuracy - cv_accuracy))
+hdi_accuracy_comparison
+```
+
+In five-fold cross-validation, each country is held out once while the model is fitted on the other four folds. The recipe learns its normalization from the fitting portion of each fold. At k = 21, the five held-out accuracies are approximately 81.48%, 73.08%, 76.92%, 84.62%, and 61.54%. Their mean is 75.53%. This is a mean of fold accuracies; it is not the fitted-data accuracy.
+
+Fitted-data accuracy exceeds mean cross-validation accuracy by 80.92 - 75.53 = 5.39 percentage points. This suggests some overfitting: performance is weaker when countries are held out. The model still does better than always predicting the majority class, which would correctly label 67 / 131 = 51.15% of these countries. Because these folds also selected k, the selected CV accuracy may be somewhat optimistic and is not an independent final test result.
 
 ### All variable model
 
@@ -363,17 +406,82 @@ cv_k_all=cv_metrics_knn_all|>
 cv_k_all
 ```
 
+The all-predictor model correctly classifies 51 non-democratic countries and 58 democratic countries. It incorrectly labels 13 non-democratic countries as democratic and 9 democratic countries as non-democratic. Rows are predictions and columns are the actual values.
+
+Its fitted-data accuracy is
+
+$$\text{Accuracy} = \frac{51 + 58}{51 + 58 + 13 + 9}
+= \frac{109}{131} \approx 0.8321.$$
+
+Thus, 83.21% of the countries used to fit this model are classified correctly.
+
+```{r all-knn-evaluation-work}
+# Check the confusion-matrix calculation
+all_results |>
+  summarise(correct = sum(.pred_class == Democracy),
+            total = n(),
+            accuracy = correct / total)
+
+# Show each held-out fold's accuracy for the selected k
+all_fold_accuracy <- collect_metrics(knn_cv_all, summarize = FALSE) |>
+  filter(neighbors == best_k_all$neighbors, .metric == "accuracy") |>
+  select(id, .estimate)
+all_fold_accuracy
+
+all_fold_accuracy |>
+  summarise(mean_cv_accuracy = mean(.estimate))
+
+# Compare fitted-data accuracy with the mean across the five folds
+all_accuracy_comparison <- all_metric |>
+  select(.metric, fitted_accuracy = .estimate) |>
+  left_join(
+    cv_k_all |> select(.metric, cv_accuracy = mean),
+    by = ".metric"
+  ) |>
+  mutate(gap_percentage_points = 100 * (fitted_accuracy - cv_accuracy))
+all_accuracy_comparison
+```
+
+At k = 5, the five held-out accuracies are approximately 81.48%, 76.92%, 76.92%, 76.92%, and 76.92%. Their mean is 77.83%. The fitted-data accuracy is higher by 83.2061 - 77.8348 = 5.37 percentage points (using unrounded accuracies), which suggests some overfitting. This gap is similar to the gap for the HDI-only model. The cross-validation accuracy is also above the 51.15% majority-class benchmark. As with the single-predictor model, the selected CV result is used for tuning and is not an independent final test result.
+
 ### Which model was best?
 
 Of your two kNN models which performed the best? Why? If it was the multivariate model was it worth the trade off of complexity? Why?
+
+```{r knn-model-comparison}
+# Compare both models using the same accuracy measures
+knn_accuracy_comparison <- bind_rows(
+  "HDI only" = hdi_accuracy_comparison,
+  "All five predictors" = all_accuracy_comparison,
+  .id = "model"
+)
+knn_accuracy_comparison
+
+# Check the majority-class benchmark
+majority_class_counts <- d |>
+  group_by(Democracy) |>
+  summarise(count = n())
+majority_class_counts
+
+majority_class_counts |>
+  summarise(majority_class_accuracy = max(count) / sum(count))
+```
+
+The all-predictor kNN model has the higher mean cross-validation accuracy: 77.83%, compared with 75.53% for HDI alone. The difference is 77.8348 - 75.5271 = 2.31 percentage points, rounded from the underlying accuracies. On the fitted data, it also correctly classifies three more countries (109 versus 106). We use cross-validation as the more useful comparison for prediction because each fold is evaluated on countries excluded from that fold's fit.
+
+Both models use the same countries and the same fold assignments. Their fitted-data versus CV gaps are almost identical (5.37 and 5.39 percentage points), so adding predictors does not noticeably increase this gap. However, a 2.31-point gain is modest, and these results do not establish a statistically significant difference between the models.
+
+Among these two kNN models, we would use the all-predictor model if prediction accuracy is the priority and all five measurements are available. The extra variables provide a small gain with no larger observed overfitting gap. HDI alone remains a reasonable simpler alternative when collecting four additional measurements is inconvenient. We would not describe the all-predictor model as a large improvement or make an overall recommendation until the logistic regression models have also been evaluated.
 
 ## Logistic Regression
 
 ### Single variable model
 
-Make a logistic regression model using your best predictor variable \#### Model
+Make a logistic regression model using your best predictor variable
 
-```{r}
+#### Model
+
+```{r hdi-logistic-model}
 d_hdi|>
   pull(Democracy)|>
   levels()
@@ -400,7 +508,36 @@ tidy(hdi_fit)
 
 #### Equation and Graph of model
 
-```{r}
+The response levels are No and Yes, so this model estimates the probability of Yes (democracy). Write this probability as $p$. Using the fitted coefficients, the estimated log-odds equation is
+
+$$
+\log\left(\frac{\hat p}{1-\hat p}\right)
+= -9.8778 + 13.3404\,\text{HDI}.
+$$
+
+Equivalently, the estimated probability is
+
+$$
+\hat p = \frac{e^{-9.8778 + 13.3404\,\text{HDI}}}
+{1 + e^{-9.8778 + 13.3404\,\text{HDI}}}.
+$$
+
+The slope is a change in log odds, not a constant change in probability. For a 0.1 increase in HDI, the estimated odds of democracy are multiplied by
+
+$$
+e^{0.1(13.3404)} \approx 3.80.
+$$
+
+```{r hdi-logistic-odds}
+hdi_log_slope <- tidy(hdi_fit) |>
+  filter(term == "human_development_ind")
+
+exp(0.1 * hdi_log_slope$estimate)
+```
+
+This describes an association between the predictor and response in these countries; it does not establish that increasing HDI causes democracy. The predictors come from the 2010 data and the democracy classification comes from the 2020 file. The intercept describes HDI = 0, outside the observed HDI range, so it has little practical interpretation here.
+
+```{r hdi-logistic-graph}
 d_hdi <- d_hdi |>
   mutate(bin_demo=if_else(Democracy=="Yes",1,0))
 
@@ -413,22 +550,265 @@ ggplot(d_hdi, aes(x = human_development_ind, y = bin_demo)) +
     method = "glm", method.args = list(family = "binomial"), 
     color = "dodgerblue", lty = 2, se = FALSE
   ) + 
-  geom_hline(aes(yintercept = 0.5), linetype = 3)
+  geom_hline(aes(yintercept = 0.5), linetype = 3) +
+  labs(title = "Probability of Democracy by Human Development Index",
+       x = "Human Development Index (2010)",
+       y = "Probability of democracy (2020); observed No = 0, Yes = 1")
 ```
 
+The fitted curve increases with HDI. The horizontal line marks a probability of 0.5, the classification cutoff. The curve reaches this cutoff at approximately HDI = 0.7404. The observed binary values are jittered vertically only to make overlapping points easier to see; their true values remain 0 and 1.
+
 #### Model evaluation-p-values, accuracy, cv for overfitting, roc, auc
+
+The HDI slope has a p-value of approximately $1.47 \times 10^{-8}$, below 0.05. This provides evidence that its log-odds slope differs from zero in this model. It does not by itself establish high predictive accuracy or that the model's assumptions are satisfied.
+
+```{r hdi-logistic-accuracy}
+hdi_log_results <- augment(hdi_fit, new_data = d_hdi)
+
+hdi_log_results |>
+  conf_mat(truth = Democracy, estimate = .pred_class)
+
+hdi_log_accuracy <- hdi_log_results |>
+  accuracy(truth = Democracy, estimate = .pred_class)
+hdi_log_accuracy
+
+# Check accuracy directly from the predictions
+hdi_log_results |>
+  summarise(correct = sum(.pred_class == Democracy),
+            total = n(),
+            accuracy = correct / total)
+```
+
+The confusion matrix has predictions in rows and actual democracy status in columns. The model correctly predicts No for 44 countries and Yes for 53 countries. There are 20 false positives (predicted Yes, actually No) and 14 false negatives (predicted No, actually Yes). At the 0.5 cutoff, fitted-data accuracy is
+
+$$
+\frac{44 + 53}{44 + 53 + 20 + 14}
+= \frac{97}{131} \approx 0.7405 = 74.05\%.
+$$
+
+This is accuracy on the same countries used to fit the model. We use five-fold cross-validation to check performance on held-out countries, reusing the same fold assignments as the kNN comparisons.
+
+```{r hdi-logistic-cross-validation}
+hdi_log_cv <- glm_workflow |>
+  fit_resamples(
+    resamples = folds,
+    metrics = metric_set(accuracy)
+  )
+
+hdi_log_cv_metrics <- collect_metrics(hdi_log_cv)
+hdi_log_cv_metrics
+
+# Show accuracy for each held-out fold
+hdi_log_fold_accuracy <- collect_metrics(hdi_log_cv, summarize = FALSE) |>
+  select(id, .metric, .estimate)
+hdi_log_fold_accuracy
+
+hdi_log_accuracy_comparison <- hdi_log_accuracy |>
+  select(.metric, fitted_accuracy = .estimate) |>
+  left_join(
+    hdi_log_cv_metrics |> select(.metric, cv_accuracy = mean),
+    by = ".metric"
+  ) |>
+  mutate(gap_percentage_points = 100 * (fitted_accuracy - cv_accuracy))
+hdi_log_accuracy_comparison
+```
+
+The five held-out accuracies are approximately 81.48%, 69.23%, 84.62%, 76.92%, and 61.54%. Their mean is 74.76%. CV accuracy is about 0.71 percentage points higher than fitted-data accuracy. These values are close, so this comparison does not show a clear overfitting gap. CV accuracy can be slightly higher because the fitted models and evaluated countries differ across folds. The model still makes errors, and similar accuracies do not prove that overfitting is impossible.
+
+The ROC curve considers different probability cutoffs rather than only 0.5. Yes is the second factor level, so we pair `.pred_Yes` with `event_level = "second"` to evaluate democracy as the positive outcome.
+
+```{r hdi-logistic-roc-auc}
+hdi_log_roc <- roc_curve(
+  hdi_log_results,
+  truth = Democracy,
+  .pred_Yes,
+  event_level = "second"
+)
+
+autoplot(hdi_log_roc) +
+  labs(title = "ROC Curve: HDI-Only Logistic Regression")
+
+hdi_log_auc <- roc_auc(
+  hdi_log_results,
+  truth = Democracy,
+  .pred_Yes,
+  event_level = "second"
+)
+hdi_log_auc
+```
+
+The fitted-data AUC is approximately 0.858. This indicates useful discrimination: a randomly chosen democratic country receives a higher predicted democracy probability than a randomly chosen non-democratic country about 85.8% of the time, with ties receiving half credit. It does not mean that 85.8% of countries are classified correctly at the 0.5 cutoff. This ROC curve and AUC use fitted-data predictions, so they may overstate discrimination on new countries; the cross-validation result above evaluates held-out accuracy.
+
+For context, this model's CV accuracy of 74.76% is slightly lower than the HDI-only kNN model's 75.53%. We will compare both logistic models before making the final model recommendation.
 
 ### All variable model
 
-Make a logistic regression model using all your predictor variables \#### Model
+We predict democracy using all five selected predictors. Country code `geo` identifies countries and is excluded. The logistic model keeps quantitative predictors in their original units. Dummy coding represents landlocked status relative to coastline countries.
+
+#### Model
+
+```{r all-logistic-model}
+all_log_recipe <- recipe(
+  Democracy ~ cell_phones_per_100_ppl + residential_energy_use_pctg +
+    landlocked + human_development_ind + maternal_mortality,
+  data = d_all
+) |>
+  step_dummy(all_nominal_predictors())
+
+all_log_spec <- logistic_reg() |>
+  set_engine("glm") |>
+  set_mode("classification")
+
+all_log_workflow <- workflow() |>
+  add_recipe(all_log_recipe) |>
+  add_model(all_log_spec)
+
+all_log_fit <- all_log_workflow |>
+  fit(data = d_all)
+
+all_log_coefficients <- tidy(all_log_fit)
+all_log_coefficients
+```
 
 #### Equation of model
 
+Let $P$ be cell-phone subscriptions per 100 people, $E$ be residential energy use as a percentage, $H$ be HDI, $M$ be maternal deaths per 100,000 live births, and $L$ be 1 for landlocked countries and 0 for coastline countries. The fitted log-odds equation is
+
+$$
+\begin{aligned}
+\hat\eta = \log\left(\frac{\hat p}{1-\hat p}\right)
+&= -12.7851 - 0.005179P - 0.015664E \\
+&\quad + 17.9843H + 0.005286M - 0.291373L.
+\end{aligned}
+$$
+
+The predicted probability of democracy is
+
+$$
+\hat p = \frac{e^{\hat\eta}}{1 + e^{\hat\eta}}.
+$$
+
+Each slope describes a change in log odds while holding the other predictors constant. In particular, a 0.1 increase in HDI multiplies the estimated odds of democracy by approximately $e^{0.1(17.9843)} = 6.04$.
+
+```{r all-logistic-hdi-odds}
+all_log_hdi_slope <- all_log_coefficients |>
+  filter(term == "human_development_ind")
+
+exp(0.1 * all_log_hdi_slope$estimate)
+```
+
+The estimated slopes for phones, residential energy share, and landlocked status are negative, while the adjusted maternal mortality slope is positive. These are conditional associations, not causal effects. In particular, the positive adjusted mortality slope should not be interpreted as evidence that increasing mortality causes democracy; it differs from the unadjusted EDA pattern and is not significant at the 0.05 level.
+
 #### Model evaluation-p-values, accuracy, cv for overfitting, roc, auc
+
+Using 0.05 as the significance cutoff, HDI is the only predictor with a statistically significant slope after accounting for the others:
+
+- HDI: p approximately 0.00000967.
+- Cell-phone subscriptions: p approximately 0.531.
+- Residential energy share: p approximately 0.437.
+- Maternal mortality: p approximately 0.0586.
+- Landlocked status: p approximately 0.619.
+
+The other four slopes do not have strong evidence of differing from zero in this fitted model at that cutoff. This does not prove they have no association with democracy; their coefficients describe what they add after adjustment for the other predictors. We retain all five here to evaluate the requested all-predictor model, and use the comparison with HDI alone to decide whether the additional predictors are worthwhile.
+
+```{r all-logistic-accuracy}
+all_log_results <- augment(all_log_fit, new_data = d_all)
+
+all_log_results |>
+  conf_mat(truth = Democracy, estimate = .pred_class)
+
+all_log_accuracy <- all_log_results |>
+  accuracy(truth = Democracy, estimate = .pred_class)
+all_log_accuracy
+
+all_log_results |>
+  summarise(correct = sum(.pred_class == Democracy),
+            total = n(),
+            accuracy = correct / total)
+```
+
+Rows of the confusion matrix are predictions and columns are actual democracy status. The model correctly classifies 47 non-democratic countries and 52 democratic countries. It makes 17 false-positive predictions and 15 false-negative predictions. At the 0.5 probability cutoff, fitted-data accuracy is
+
+$$
+\frac{47 + 52}{47 + 52 + 17 + 15}
+= \frac{99}{131} \approx 0.7557 = 75.57\%.
+$$
+
+```{r all-logistic-cross-validation}
+# Reuse the all-predictor kNN folds for a consistent comparison
+all_log_cv <- all_log_workflow |>
+  fit_resamples(
+    resamples = folds_all,
+    metrics = metric_set(accuracy)
+  )
+
+all_log_cv_metrics <- collect_metrics(all_log_cv)
+all_log_cv_metrics
+
+all_log_fold_accuracy <- collect_metrics(all_log_cv, summarize = FALSE) |>
+  select(id, .metric, .estimate)
+all_log_fold_accuracy
+
+all_log_accuracy_comparison <- all_log_accuracy |>
+  select(.metric, fitted_accuracy = .estimate) |>
+  left_join(
+    all_log_cv_metrics |> select(.metric, cv_accuracy = mean),
+    by = ".metric"
+  ) |>
+  mutate(gap_percentage_points = 100 * (fitted_accuracy - cv_accuracy))
+all_log_accuracy_comparison
+```
+
+The five held-out accuracies are approximately 77.78%, 65.38%, 84.62%, 80.77%, and 57.69%. Their mean is 73.25%. Fitted-data accuracy is about 2.32 percentage points higher than CV accuracy, suggesting some overfitting. The fold results also vary considerably, so this mean is an estimate rather than a guarantee of performance on new countries. The model still beats the 51.15% majority-class benchmark.
+
+```{r all-logistic-roc-auc}
+all_log_roc <- roc_curve(
+  all_log_results,
+  truth = Democracy,
+  .pred_Yes,
+  event_level = "second"
+)
+
+autoplot(all_log_roc) +
+  labs(title = "ROC Curve: All-Predictor Logistic Regression")
+
+all_log_auc <- roc_auc(
+  all_log_results,
+  truth = Democracy,
+  .pred_Yes,
+  event_level = "second"
+)
+all_log_auc
+```
+
+The fitted-data AUC is approximately 0.866. It indicates useful discrimination across cutoffs: democratic countries tend to receive higher predicted democracy probabilities than non-democratic countries. This is not 86.6% classification accuracy. The ROC curve and AUC are based on fitted-data predictions and may be optimistic for new countries.
 
 ### Which model was best?
 
-Of your two logistic regression models which performed the best? Why? If it was the multivariate model was it worth the trade off of complexity? Why?
+```{r logistic-model-comparison}
+logistic_accuracy_comparison <- bind_rows(
+  "HDI only" = hdi_log_accuracy_comparison,
+  "All five predictors" = all_log_accuracy_comparison,
+  .id = "model"
+)
+logistic_accuracy_comparison
+
+logistic_auc_comparison <- bind_rows(
+  "HDI only" = hdi_log_auc,
+  "All five predictors" = all_log_auc,
+  .id = "model"
+)
+logistic_auc_comparison
+```
+
+| Logistic model | Number of predictors | Fitted-data accuracy | Mean CV accuracy | Fitted-data AUC |
+|---|---:|---:|---:|---:|
+| HDI only | 1 | 74.05% | 74.76% | 0.858 |
+| All predictors | 5 | 75.57% | 73.25% | 0.866 |
+
+We prefer the HDI-only logistic model. Both models use the same countries, the same fold assignments, and a 0.5 classification cutoff. Adding four predictors improves fitted-data accuracy by about 1.53 percentage points but reduces mean CV accuracy by about 1.51 percentage points. The small improvement in fitted-data AUC does not establish a benefit on new countries.
+
+HDI is also the only predictor with a slope p-value below 0.05 in the adjusted model. The other predictors add complexity and require more data without improving the observed CV accuracy. In these results, that tradeoff is not worthwhile. The HDI-only model is easier to explain, and its fitted-data and CV accuracies are closer. The CV difference is modest, so we do not claim that the simpler model has been proven superior in the population; it is the more practical choice between these two logistic models based on this analysis.
 
 ## Best model
 
