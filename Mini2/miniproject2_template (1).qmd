@@ -1,6 +1,6 @@
 ---
 title: "Mini-project 2 Template"
-author: "Team member names here."
+author: "Mason Spikula, Quinn Hughes, Jincheng Li"
 format: pdf
 editor: visual
 ---
@@ -23,6 +23,8 @@ Put whatever libraries you use here.
 library(tidyverse)
 library(ggplot2)
 library(dplyr)
+library(tidymodels)
+library(kknn)
 ```
 
 Load your data here
@@ -45,6 +47,7 @@ d |>
   geom_boxplot() +
   labs(x = "democracy", y = "cell phone per 100 people")
 ```
+
 Democratic countries have higher cell phone per 100 capita than the non-democratic ones. And the mid-quantiles are separated pretty well.
 
 ### Stats and description
@@ -64,6 +67,7 @@ d %>%
     .groups = "drop"
   )
 ```
+
 Non-democratic countries have higher std.dev. than the democratic ones, and all quantiles are higher in democratic countries.
 
 ## Variable 2: `residential_energy_use_pctg`
@@ -76,6 +80,7 @@ d |>
   geom_boxplot() +
   labs(x = "democracy", y = "residential energy use percentage")
 ```
+
 The mid quantiles are also well separated: democratic countries have much lower residential energy use percentage.
 
 ### Stats and description
@@ -95,7 +100,8 @@ d %>%
     .groups = "drop"
   )
 ```
-The grouped distribution is similar to the first one: democratic countries have overall better performance in all quantile and less standard deviation, since there's some physical and economic cap for the variable. 
+
+The grouped distribution is similar to the first one: democratic countries have overall better performance in all quantile and less standard deviation, since there's some physical and economic cap for the variable.
 
 ## Variable 3: `landlocked`
 
@@ -109,6 +115,7 @@ d |>
   mutate(proportion = n / sum(n)) |>
   ungroup()
 ```
+
 Coastline countries have lower proportion of non-democracy (0.46 vs. 0.58), but doesn't provide enough sufficient evidence to separate the democracy groups.
 
 ### Stats and description
@@ -121,7 +128,8 @@ chisq.test(tab)
 
 fisher.test(tab)
 ```
-Democratic regimes were less common among landlocked countries (41.7%) than coastal countries (53.3%). However, this association was not statistically significant (Fisher’s exact test: OR = 0.63, 95% CI [0.23, 1.68], p = .369).
+
+Democratic regimes were less common among landlocked countries (41.7%) than coastal countries (53.3%). However, this association was not statistically significant (Fisher’s exact test: OR = 0.63, 95% CI \[0.23, 1.68\], p = .369).
 
 ## Variable 4: `human_development_ind`
 
@@ -133,6 +141,7 @@ d |>
   geom_boxplot() +
   labs(x = "democracy", y = "human_development_ind")
 ```
+
 The mid quantile are almost separated (w/ a small overlap). The spread was similar, but democratic countries still have it smaller.
 
 ### Stats and description
@@ -152,6 +161,7 @@ d %>%
     .groups = "drop"
   )
 ```
+
 The difference of std. dev. is smaller than the previous two variables, and in all quantile the democratic countries are having higher hdi.
 
 ## Variable 5: `maternal_mortality`
@@ -164,6 +174,7 @@ d |>
   geom_boxplot() +
   labs(x = "democracy", y = "maternal mortality")
 ```
+
 Democratic countries have very little maternal mortality, and the spread is really compressed to the bottom, while having several outliers, and non-democratic countries also have some high-performance cases, (democratic states overlapping with all high-performance non-democratic states.)
 
 ### Stats and description
@@ -183,6 +194,7 @@ d %>%
     .groups = "drop"
   )
 ```
+
 The std. dev. is much smaller in democratic countries, and performance is better in all quantiles.
 
 ## Which variable for single variable models?
@@ -195,17 +207,161 @@ I think the best predictor might be the hdi, since it offers the most separating
 
 Make a kNN model using your best predictor variable \#### Model tuning to find k
 
-#### Model for best k
+```{r}
+d_hdi <- d |>
+  filter(!is.na(Democracy), !is.na(human_development_ind)) |>
+  mutate(Democracy = as.factor(Democracy))
+
+hdi_recipe <- recipe(Democracy ~ human_development_ind, data = d_hdi) |>
+  step_normalize(all_numeric_predictors())
+
+set.seed(2005)
+folds <- vfold_cv(d_hdi, v = 5)
+
+knn_spec2 <- nearest_neighbor(neighbors=tune(),  weight_func = "rectangular") |>
+  set_engine("kknn")|>
+  set_mode("classification")
+knn_wf<-workflow()|>
+  add_recipe(hdi_recipe)|>
+  add_model(knn_spec2)
+knn_grid <- tibble(neighbors = seq(from=3, to=31, by=2)) 
+class_met=metric_set(accuracy)
+knn_cv <- tune_grid(
+  knn_wf,
+  resamples = folds,
+  grid = knn_grid, metrics=class_met
+)
+cv_metrics_knn<-collect_metrics(knn_cv)
+cv_metrics_knn
+
+autoplot(knn_cv, metric = "accuracy")
+best_k <- select_best(knn_cv, metric = "accuracy")
+best_k
+```
+
+21 is the best k.
+
+#### Model for best k 
+
+```{r}
+knn_spec<-nearest_neighbor(neighbors=21,  weight_func = "rectangular") |>
+  set_engine("kknn")|>
+  set_mode("classification")
+
+knn_wf<-workflow()|>
+  add_recipe(hdi_recipe)|>
+  add_model(knn_spec)
+
+hdi_knn_class <- 
+  knn_wf |> 
+  fit(data = d_hdi)
+
+hdi_knn_class
+```
+
+Confirms that 21 is the best k.
 
 #### Model evaluation-accuracy, cv for overfitting
+
+```{r}
+hdi_results <- augment(hdi_knn_class, new_data = d_hdi)
+
+hdi_results|>
+  conf_mat(truth = Democracy, estimate = .pred_class)
+
+hdi_metric<-hdi_results|>
+  accuracy(truth = Democracy, estimate = .pred_class)
+
+hdi_metric
+
+cv_k_21=cv_metrics_knn|>
+  filter(neighbors==21)
+
+cv_k_21
+```
 
 ### All variable model
 
 Make a kNN model using all your predictor variables \#### Model tuning to find k using cv.
 
+```{r}
+d_all <- d |>
+  filter(!is.na(Democracy), !is.na(cell_phones_per_100_ppl),
+         !is.na(residential_energy_use_pctg), !is.na(landlocked),
+         !is.na(human_development_ind), !is.na(maternal_mortality)) |>
+  mutate(Democracy = as.factor(Democracy))
+
+all_recipe <- recipe(Democracy ~ cell_phones_per_100_ppl + residential_energy_use_pctg +
+                       landlocked + human_development_ind + maternal_mortality, data = d_all) |>
+  step_normalize(all_numeric_predictors())|>
+  step_dummy(all_nominal_predictors())
+
+set.seed(2005)
+folds_all <- vfold_cv(d_all, v = 5)
+
+knn_spec2 <- nearest_neighbor(neighbors=tune(),  weight_func = "rectangular") |>
+  set_engine("kknn")|>
+  set_mode("classification")
+
+knn_wf_all<-workflow()|>
+  add_recipe(all_recipe)|>
+  add_model(knn_spec2)
+
+knn_grid <- tibble(neighbors = seq(from=3, to=31, by=2)) 
+class_met=metric_set(accuracy)
+
+knn_cv_all <- tune_grid(
+  knn_wf_all,
+  resamples = folds_all,
+  grid = knn_grid, metrics=class_met
+)
+
+cv_metrics_knn_all<-collect_metrics(knn_cv_all)
+cv_metrics_knn_all
+
+autoplot(knn_cv_all, metric = "accuracy")
+best_k_all <- select_best(knn_cv_all, metric = "accuracy")
+best_k_all
+```
+
+Best k = 5
+
 #### Model for best k
 
+```{r}
+knn_spec_all<-nearest_neighbor(neighbors=5,  weight_func = "rectangular") |>
+  set_engine("kknn")|>
+  set_mode("classification")
+
+knn_wf_all<-workflow()|>
+  add_recipe(all_recipe)|>
+  add_model(knn_spec_all)
+
+all_knn_class <- 
+  knn_wf_all |> 
+  fit(data = d_all)
+
+all_knn_class
+```
+
 #### Model evaluation-accuracy, cv for overfitting
+
+```{r}
+all_results <- augment(all_knn_class, new_data = d_all)
+
+all_results|>
+  conf_mat(truth = Democracy, estimate = .pred_class)
+
+all_metric<-all_results|>
+  accuracy(truth = Democracy, estimate = .pred_class)
+
+all_metric
+
+cv_k_all=cv_metrics_knn_all|>
+  filter(neighbors==5)
+
+cv_k_all
+```
 
 ### Which model was best?
 
@@ -217,7 +373,48 @@ Of your two kNN models which performed the best? Why? If it was the multivariate
 
 Make a logistic regression model using your best predictor variable \#### Model
 
+```{r}
+d_hdi|>
+  pull(Democracy)|>
+  levels()
+
+log_rec<-
+  recipe(Democracy~human_development_ind, data=d_hdi)
+
+logit_mod <-
+  logistic_reg()|>
+  set_engine("glm")|>
+  set_mode("classification")
+
+glm_workflow <-
+  workflow() |>
+  add_recipe(log_rec)|>
+  add_model(logit_mod)
+
+hdi_fit <-
+  glm_workflow |>
+  fit(data = d_hdi)
+
+tidy(hdi_fit)
+```
+
 #### Equation and Graph of model
+
+```{r}
+d_hdi <- d_hdi |>
+  mutate(bin_demo=if_else(Democracy=="1",1,0))
+
+ggplot(d_hdi, aes(x = human_development_ind, y = bin_demo)) + 
+  geom_point(
+    position = position_jitter(width = 0, height = 0.05), 
+    alpha = 0.5
+  ) + 
+  geom_smooth(
+    method = "glm", method.args = list(family = "binomial"), 
+    color = "dodgerblue", lty = 2, se = FALSE
+  ) + 
+  geom_hline(aes(yintercept = 0.5), linetype = 3)
+```
 
 #### Model evaluation-p-values, accuracy, cv for overfitting, roc, auc
 
