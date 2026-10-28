@@ -402,7 +402,7 @@ tidy(hdi_fit)
 
 ```{r}
 d_hdi <- d_hdi |>
-  mutate(bin_demo=if_else(Democracy=="1",1,0))
+  mutate(bin_demo=if_else(Democracy=="Yes",1,0))
 
 ggplot(d_hdi, aes(x = human_development_ind, y = bin_demo)) + 
   geom_point(
